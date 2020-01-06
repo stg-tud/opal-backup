@@ -181,7 +181,7 @@ class WrongDefault {
 
 class DeterministicCall {
 
-    @LazyInitialized("Lazy initialization with call to deterministic method")
+    //FIXME: Iusse with Java11 @LazyInitialized("Lazy initialization with call to deterministic method")
     //FIXME: Issue with Java11 @NonFinal(value = "Analysis doesn't recognize lazy initialization",
     //       analyses = { L0FieldMutabilityAnalysis.class, L1FieldMutabilityAnalysis.class })
     private int x;
