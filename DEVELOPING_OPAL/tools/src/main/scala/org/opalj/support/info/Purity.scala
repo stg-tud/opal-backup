@@ -25,12 +25,12 @@ import org.opalj.br.fpcf.FPCFAnalysis
 import org.opalj.br.fpcf.FPCFAnalysisScheduler
 import org.opalj.br.fpcf.FPCFLazyAnalysisScheduler
 import org.opalj.br.fpcf.PropertyStoreKey
-import org.opalj.br.fpcf.analyses.LazyClassImmutabilityAnalysis
+import org.opalj.br.fpcf.analyses.LazyL0ClassImmutabilityAnalysis
 import org.opalj.br.fpcf.analyses.LazyL0CompileTimeConstancyAnalysis
-import org.opalj.br.fpcf.analyses.LazyL0FieldMutabilityAnalysis
+import org.opalj.br.fpcf.analyses.LazyL0FieldImmutabilityAnalysis
 import org.opalj.br.fpcf.analyses.LazyL0PurityAnalysis
 import org.opalj.br.fpcf.analyses.LazyStaticDataUsageAnalysis
-import org.opalj.br.fpcf.analyses.LazyTypeImmutabilityAnalysis
+import org.opalj.br.fpcf.analyses.LazyL0TypeImmutabilityAnalysis
 import org.opalj.br.fpcf.properties.CompileTimePure
 import org.opalj.br.fpcf.properties.ContextuallyPure
 import org.opalj.br.fpcf.properties.ContextuallySideEffectFree
@@ -47,9 +47,9 @@ import org.opalj.br.DefinedMethod
 import org.opalj.br.analyses.DeclaredMethodsKey
 import org.opalj.br.analyses.Project
 import org.opalj.br.analyses.Project.JavaClassFileReader
-import org.opalj.br.fpcf.analyses.EagerClassImmutabilityAnalysis
-import org.opalj.br.fpcf.analyses.EagerL0FieldMutabilityAnalysis
-import org.opalj.br.fpcf.analyses.EagerTypeImmutabilityAnalysis
+import org.opalj.br.fpcf.analyses.EagerL0ClassImmutabilityAnalysis
+import org.opalj.br.fpcf.analyses.EagerL0FieldImmutabilityAnalysis
+import org.opalj.br.fpcf.analyses.EagerL0TypeImmutabilityAnalysis
 import org.opalj.br.fpcf.properties.cg.Callers
 import org.opalj.br.fpcf.properties.cg.NoCallers
 import org.opalj.ai.Domain
@@ -60,16 +60,13 @@ import org.opalj.br.fpcf.analyses.EagerUnsoundPrematurelyReadFieldsAnalysis
 import org.opalj.br.fpcf.analyses.LazyUnsoundPrematurelyReadFieldsAnalysis
 import org.opalj.fpcf.PropertyStoreContext
 import org.opalj.fpcf.seq.PKESequentialPropertyStore
-import org.opalj.log.DevNullLogger
-import org.opalj.log.GlobalLogContext
 import org.opalj.log.LogContext
-import org.opalj.log.OPALLogger
 import org.opalj.tac.cg.AbstractCallGraphKey
 import org.opalj.tac.cg.AllocationSiteBasedPointsToCallGraphKey
 import org.opalj.tac.cg.CHACallGraphKey
 import org.opalj.tac.cg.RTACallGraphKey
 import org.opalj.tac.fpcf.analyses.LazyFieldLocalityAnalysis
-import org.opalj.tac.fpcf.analyses.LazyL1FieldMutabilityAnalysis
+import org.opalj.tac.fpcf.analyses.LazyL1FieldImmutabilityAnalysis
 import org.opalj.tac.fpcf.analyses.escape.LazyInterProceduralEscapeAnalysis
 import org.opalj.tac.fpcf.analyses.escape.LazyReturnValueFreshnessAnalysis
 import org.opalj.tac.fpcf.analyses.escape.LazySimpleEscapeAnalysis
@@ -79,9 +76,14 @@ import org.opalj.tac.fpcf.analyses.purity.L2PurityAnalysis
 import org.opalj.tac.fpcf.analyses.purity.LazyL1PurityAnalysis
 import org.opalj.tac.fpcf.analyses.purity.LazyL2PurityAnalysis
 import org.opalj.tac.fpcf.analyses.purity.SystemOutLoggingAllExceptionRater
-import org.opalj.tac.fpcf.analyses.EagerL1FieldMutabilityAnalysis
-import org.opalj.tac.fpcf.analyses.EagerL2FieldMutabilityAnalysis
-import org.opalj.tac.fpcf.analyses.LazyL2FieldMutabilityAnalysis
+import org.opalj.tac.fpcf.analyses.EagerL1FieldImmutabilityAnalysis
+import org.opalj.tac.fpcf.analyses.EagerL2FieldImmutabilityAnalysis
+import org.opalj.tac.fpcf.analyses.LazyL2FieldImmutabilityAnalysis
+import org.opalj.tac.fpcf.analyses.immutability.LazyL3FieldImmutabilityAnalysis
+import org.opalj.tac.fpcf.analyses.immutability.EagerL1ClassImmutabilityAnalysis
+import org.opalj.tac.fpcf.analyses.immutability.EagerL1TypeImmutabilityAnalysis
+import org.opalj.tac.fpcf.analyses.immutability.LazyL1ClassImmutabilityAnalysis
+import org.opalj.tac.fpcf.analyses.immutability.LazyL1TypeImmutabilityAnalysis
 
 /**
  * Executes a purity analysis (L2 by default) along with necessary supporting analysis.
@@ -90,7 +92,7 @@ import org.opalj.tac.fpcf.analyses.LazyL2FieldMutabilityAnalysis
  */
 object Purity {
 
-    OPALLogger.updateLogger(GlobalLogContext, DevNullLogger)
+    //OPALLogger.updateLogger(GlobalLogContext, DevNullLogger)
 
     def usage: String = {
         "Usage: java …PurityAnalysisEvaluation \n"+
@@ -200,8 +202,7 @@ object Purity {
                 if (numThreads == 0) {
                     org.opalj.fpcf.seq.PKESequentialPropertyStore(context: _*)
                 } else {
-                    org.opalj.fpcf.par.ParTasksManagerConfig.MaxThreads = numThreads
-                    // FIXME: this property store is broken
+                    org.opalj.fpcf.par.PKECPropertyStore.MaxThreads = numThreads
                     org.opalj.fpcf.par.PKECPropertyStore(context: _*)
                 }
             }
@@ -531,13 +532,14 @@ object Purity {
                 Console.println(usage)
                 return ;
         }
-
-        if (eager) {
-            support ::= EagerClassImmutabilityAnalysis
-            support ::= EagerTypeImmutabilityAnalysis
-        } else {
-            support ::= LazyClassImmutabilityAnalysis
-            support ::= LazyTypeImmutabilityAnalysis
+        if (!fieldMutabilityAnalysisName.contains("L3")) {
+            if (eager) {
+                support ::= EagerL0ClassImmutabilityAnalysis
+                support ::= EagerL0TypeImmutabilityAnalysis
+            } else {
+                support ::= LazyL0ClassImmutabilityAnalysis
+                support ::= LazyL0TypeImmutabilityAnalysis
+            }
         }
 
         escapeAnalysisName match {
@@ -556,28 +558,40 @@ object Purity {
         }
 
         fieldMutabilityAnalysisName match {
-            case Some("L0") if eager ⇒ support ::= EagerL0FieldMutabilityAnalysis
+            case Some("L0") if eager ⇒ support ::= EagerL0FieldImmutabilityAnalysis
 
-            case Some("L0")          ⇒ support ::= LazyL0FieldMutabilityAnalysis
+            case Some("L0")          ⇒ support ::= LazyL0FieldImmutabilityAnalysis
 
-            case Some("L1") if eager ⇒ support ::= EagerL1FieldMutabilityAnalysis
+            case Some("L1") if eager ⇒ support ::= EagerL1FieldImmutabilityAnalysis
 
-            case Some("L1")          ⇒ support ::= LazyL1FieldMutabilityAnalysis
+            case Some("L1")          ⇒ support ::= LazyL1FieldImmutabilityAnalysis
 
             case Some("L2") if eager ⇒
-                support ::= EagerL2FieldMutabilityAnalysis
+                support ::= EagerL2FieldImmutabilityAnalysis
                 support ::= EagerUnsoundPrematurelyReadFieldsAnalysis
 
             case Some("L2") ⇒
-                support ::= LazyL2FieldMutabilityAnalysis
+                support ::= LazyL2FieldImmutabilityAnalysis
                 support ::= LazyUnsoundPrematurelyReadFieldsAnalysis
+
+            case Some("L3") ⇒
+                support ::= LazyL3FieldImmutabilityAnalysis
+                support ::= LazyUnsoundPrematurelyReadFieldsAnalysis
+
+                if (eager) {
+                    support ::= EagerL1ClassImmutabilityAnalysis
+                    support ::= EagerL1TypeImmutabilityAnalysis
+                } else {
+                    support ::= LazyL1ClassImmutabilityAnalysis
+                    support ::= LazyL1TypeImmutabilityAnalysis
+                }
 
             case Some("none") ⇒
 
             case None ⇒ analysis match {
-                case LazyL0PurityAnalysis ⇒ LazyL0FieldMutabilityAnalysis
-                case LazyL1PurityAnalysis ⇒ LazyL1FieldMutabilityAnalysis
-                case LazyL2PurityAnalysis ⇒ LazyL1FieldMutabilityAnalysis
+                case LazyL0PurityAnalysis ⇒ LazyL0FieldImmutabilityAnalysis
+                case LazyL1PurityAnalysis ⇒ LazyL1FieldImmutabilityAnalysis
+                case LazyL2PurityAnalysis ⇒ LazyL1FieldImmutabilityAnalysis
             }
 
             case Some(a) ⇒
